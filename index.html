@@ -36,13 +36,108 @@ let data=JSON.parse(localStorage.getItem(KEY)||"null")||{tasks:[],week:weekStart
 if(data.week!==weekStart()){data.week=weekStart();data.tasks.forEach(t=>t.done=false)}
 function save(){localStorage.setItem(KEY,JSON.stringify(data))}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-function render(){let s=new Date(data.week+"T00:00:00");document.getElementById("days").innerHTML=names.map((n,i)=>{let d=new Date(s);d.setDate(s.getDate()+i);return `<button class="day ${data.selected===i+1?"active":""}" onclick="selectDay(${i+1})"><div class="dow">${short[i]}</div><div class="num">${d.getDate()}</div></button>`}).join("");
+function render(){
+  let s=new Date(data.week+"T00:00:00");
+
+  document.getElementById("days").innerHTML=names.map((n,i)=>{
+    let d=new Date(s);
+    d.setDate(s.getDate()+i);
+
+    return `<button class="day ${data.selected===i+1?"active":""}" onclick="selectDay(${i+1})">
+      <div class="dow">${short[i]}</div>
+      <div class="num">${d.getDate()}</div>
+    </button>`;
+  }).join("");
+
+  let ts=data.tasks.filter(t =>
+    t.day===data.selected || t.recurringDaily
+  );
+
+  document.getElementById("tasks").innerHTML=ts.length
+    ? ts.map(t=>`
+      <div class="task ${t.done?"done":""}">
+        <button class="check ${t.done?"on":""}" onclick="toggle('${t.id}')">
+          ${t.done?"✓":""}
+        </button>
+
+        <div style="flex:1">
+          <div class="name">${esc(t.name)}</div>
+          <div class="meta">
+            ${esc(t.room||"")}
+            ${t.recurringDaily?" · Daily":t.recurring?" · Weekly":""}
+          </div>
+        </div>
+
+        <button class="link" onclick="editTask('${t.id}')">Edit</button>
+      </div>
+    `).join("")
+    : `<div class="empty">
+        Nothing scheduled for ${names[data.selected-1]}.<br>
+        Add a cleaning task with +
+      </div>`;
+
+  let total=data.tasks.length;
+  let done=data.tasks.filter(t=>t.done).length;
+  let p=total?Math.round(done/total*100):0;
+
+  document.getElementById("pct").textContent=p+"%";
+  document.getElementById("fill").style.width=p+"%";
+  document.getElementById("count").textContent=`${done} of ${total} completed`;
+
+  save();
+}
 let ts=data.tasks.filter(t=>t.day===data.selected);document.getElementById("tasks").innerHTML=ts.length?ts.map(t=>`<div class="task ${t.done?"done":""}"><button class="check ${t.done?"on":""}" onclick="toggle('${t.id}')">${t.done?"✓":""}</button><div style="flex:1"><div class="name">${esc(t.name)}</div><div class="meta">${esc(t.room||"")}${t.recurring?" · Weekly":""}</div></div><button class="link" onclick="editTask('${t.id}')">Edit</button></div>`).join(""):`<div class="empty">Nothing scheduled for ${names[data.selected-1]}.<br>Add a cleaning task with +</div>`;
 let total=data.tasks.length,done=data.tasks.filter(t=>t.done).length,p=total?Math.round(done/total*100):0;document.getElementById("pct").textContent=p+"%";document.getElementById("fill").style.width=p+"%";document.getElementById("count").textContent=`${done} of ${total} completed`;save()}
 function selectDay(n){data.selected=n;render()} function toggle(id){let t=data.tasks.find(x=>x.id===id);if(t)t.done=!t.done;render()}
 function fillDays(v){day.innerHTML=names.map((n,i)=>`<option value="${i+1}" ${v===i+1?"selected":""}>${n}</option>`).join("")}
-function openAdd(){editing=null;title.textContent="Add cleaning task";taskName.value="";room.value="";fillDays(data.selected);recurring.checked=true;dlg.showModal()}
-function editTask(id){let t=data.tasks.find(x=>x.id===id);if(!t)return;editing=id;title.textContent="Edit cleaning task";taskName.value=t.name;room.value=t.room||"";fillDays(t.day);recurring.checked=!!t.recurring;dlg.showModal()}
-function saveTask(e){e.preventDefault();let obj={id:editing||crypto.randomUUID(),name:taskName.value.trim(),room:room.value.trim(),day:+day.value,recurring:recurring.checked,done:editing?(data.tasks.find(t=>t.id===editing)?.done||false):false};if(editing)data.tasks[data.tasks.findIndex(t=>t.id===editing)]=obj;else data.tasks.push(obj);dlg.close();render()}
+function openAdd(){
+  editing=null;
+  title.textContent="Add cleaning task";
+  taskName.value="";
+  room.value="";
+  fillDays(data.selected);
+  recurring.checked=true;
+  recurringdaily.checked=false;
+  dlg.showModal();
+}
+function editTask(id){
+  let t=data.tasks.find(x=>x.id===id);
+  if(!t)return;
+
+  editing=id;
+  title.textContent="Edit cleaning task";
+  taskName.value=t.name;
+  room.value=t.room||"";
+  fillDays(t.day);
+
+  recurring.checked=!!t.recurring;
+  recurringdaily.checked=!!t.recurringDaily;
+
+  dlg.showModal();
+}
+function saveTask(e){
+  e.preventDefault();
+
+  let obj={
+    id:editing||crypto.randomUUID(),
+    name:taskName.value.trim(),
+    room:room.value.trim(),
+    day:+day.value,
+    recurring:recurring.checked,
+    recurringDaily:recurringdaily.checked,
+    done:editing
+      ? (data.tasks.find(t=>t.id===editing)?.done||false)
+      : false
+  };
+
+  if(editing){
+    data.tasks[data.tasks.findIndex(t=>t.id===editing)]=obj;
+  }else{
+    data.tasks.push(obj);
+  }
+
+  dlg.close();
+  render();
+}
 render();if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js");
 </script></body></html>
